@@ -55,7 +55,6 @@ void Chess::FENtoBoard(const std::string& fen) {
     // convert a FEN string to a board
     // FEN is a space delimited string with 6 fields
     int boardIndex = 0;
-
     for(int i = 0; i < fen.length(); ++i){
 
         if(fen[i] == '/') continue;
