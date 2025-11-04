@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Site BuildName="Win32-MSBuild"
+	BuildStamp="20251103-2242-Experimental"
+	Name="NemuiMaou"
+	Generator="ctest-4.1.0"
+	CompilerName="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx86/x64/cl.exe"
+	CompilerVersion="19.44.35215.0"
+	OSName="Windows"
+	Hostname="NemuiMaou"
+	OSRelease=" Personal"
+	OSVersion=" (Build 26100)"
+	OSPlatform="AMD64"
+	Is64Bits="1"
+	VendorString="GenuineIntel"
+	VendorID="Intel Corporation"
+	FamilyID="6"
+	ModelID="10"
+	ModelName=""
+	ProcessorCacheSize="-1"
+	NumberOfLogicalCPU="16"
+	NumberOfPhysicalCPU="10"
+	TotalVirtualMemory="27779"
+	TotalPhysicalMemory="16003"
+	LogicalProcessorsPerPhysical="1"
+	ProcessorClockFrequency="2400"
+	>
+	<Testing>
+		<StartDateTime>Nov 03 14:42 Pacific Standard Time</StartDateTime>
+		<StartTestTime>1762209735</StartTestTime>
+		<TestList/>
+		<EndDateTime>Nov 03 14:42 Pacific Standard Time</EndDateTime>
+		<EndTestTime>1762209735</EndTestTime>
+		<ElapsedMinutes>0</ElapsedMinutes>
+	</Testing>
+</Site>

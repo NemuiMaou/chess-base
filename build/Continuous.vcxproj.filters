@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\djrom\OneDrive\Documents\GitHub\chess-base\build\CMakeFiles\3523526c2b5e946371f4a7001bf20172\Continuous.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\djrom\OneDrive\Documents\GitHub\chess-base\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\Users\djrom\OneDrive\Documents\GitHub\chess-base\build\CMakeFiles\Continuous" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{F07F1EDF-80E8-38DB-BBD1-7D5DE248FE24}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
