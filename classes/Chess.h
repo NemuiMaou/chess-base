@@ -2,18 +2,29 @@
 
 #include "Game.h"
 #include "Grid.h"
+#include "BitBoard.h"
 
 constexpr int pieceSize = 80;
 
-enum ChessPiece
+enum AllBitBoards
 {
-    NoPiece,
-    Pawn,
-    Knight,
-    Bishop,
-    Rook,
-    Queen,
-    King
+    WHITE_PAWNS,
+    WHITE_KNIGHTS,
+    WHITE_BISHOPS,
+    WHITE_ROOKS,
+    WHITE_QUEENS,
+    WHITE_KING,
+    BLACK_PAWNS,
+    BLACK_KNIGHTS,
+    BLACK_BISHOPS,
+    BLACK_ROOKS,
+    BLACK_QUEENS,
+    BLACK_KING,
+    WHITE_ALL_PIECES,
+    BLACK_ALL_PIECES,
+    OCCUPANCY,
+    EMPTY_SQUARES,
+    e_numBitBoards
 };
 
 class Chess : public Game
@@ -39,6 +50,15 @@ public:
 
     Grid* getGrid() override { return _grid; }
 
+    void generateKingMoveBitBoard();
+    void generateKingMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t emptySquares);
+
+    void generateKnightMoveBitBoard();
+    void generateKnightMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t emptySquares);
+
+    void generatePawnMoveBitBoardList(std::vector<BitMove>& moves, const BitBoard pawnBoard, const BitBoard emptySquares, const BitBoard enemySquares, char playerColor);
+    void generatePawnMoves(const char *state, std::vector<BitMove>& moevs, int file, int rank, int playerColor);
+
 private:
     Bit* PieceForPlayer(const int playerNumber, ChessPiece piece);
     Player* ownerAt(int x, int y) const;
@@ -46,4 +66,7 @@ private:
     char pieceNotation(int x, int y) const;
 
     Grid* _grid;
+
+    BitBoard _knightBitboards[64];
+    BitBoard _kingBitboards[64];
 };

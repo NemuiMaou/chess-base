@@ -48,6 +48,9 @@ void Chess::setUpBoard()
     _grid->initializeChessSquares(pieceSize, "boardsquare.png");
     FENtoBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
 
+    
+    generateKnightMoveBitBoard();
+    generateKingMoveBitBoard();
     startGame();
 }
 
@@ -92,6 +95,11 @@ void Chess::FENtoBoard(const std::string& fen) {
                     break;
             }
             Bit* bit = PieceForPlayer(playerColor, chessPiece);
+
+            int colorTag = (playerColor == 1) ? 128 : 0;
+            bit->setGameTag(colorTag + static_cast<int>(chessPiece));
+
+            // int flippedIndex = (7 - (boardIndex / 8)) * 8 + (boardIndex % 8);
             ChessSquare* currentSquare = _grid->getSquareByIndex(boardIndex);
             currentSquare->setBit(bit);
             bit->setPosition(currentSquare->getPosition());
@@ -124,6 +132,55 @@ bool Chess::canBitMoveFrom(Bit &bit, BitHolder &src)
 
 bool Chess::canBitMoveFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
 {
+    ChessSquare* srcSquare = dynamic_cast<ChessSquare*>(&src);
+    ChessSquare* dstSquare = dynamic_cast<ChessSquare*>(&dst);
+    if (!srcSquare || !dstSquare) return false;
+
+    const int fromX = srcSquare->getColumn();
+    const int fromY = srcSquare->getRow();
+    const int toX   = dstSquare->getColumn();
+    const int toY   = dstSquare->getRow();
+    if (fromX == toX && fromY == toY) return false;
+
+    // to prevent self-capture
+    Player* mover = bit.getOwner();
+    Player* atDst = ownerAt(toX, toY);
+    if (atDst && mover == atDst) return false;
+
+    
+    char p = pieceNotation(fromX, fromY);
+    if (p == '0') return false;
+
+    auto idx = [](int x, int y){ return y * 8 + x; };
+    const int fromSq = idx(fromX, fromY);
+    const int toSq   = idx(toX, toY);
+
+    // knights
+    if (p == 'N' || p == 'n') {
+        uint64_t mask = _knightBitboards[fromSq].getData();
+        return (mask & (1ULL << toSq)) != 0ULL;
+    }
+
+    // kings
+    if (p == 'K' || p == 'k') {
+        uint64_t mask = _kingBitboards[fromSq].getData();
+        return (mask & (1ULL << toSq)) != 0ULL;
+    }
+
+    // pawns
+    if (p == 'P' || p == 'p') {
+        std::vector<BitMove> pmoves;
+        const int playerColor = (p == 'P') ? 0 : 1;   
+        auto s = stateString();                       
+        generatePawnMoves(s.c_str(), pmoves, fromX, fromY, playerColor);
+
+        for (const auto& m : pmoves) {
+            if (m.to == toSq) return true;
+        }
+        return false;
+    }
+
+    // need to add the others (anything else can just move as of right now)
     return true;
 }
 
@@ -183,4 +240,201 @@ void Chess::setStateString(const std::string &s)
             square->setBit(nullptr);
         }
     });
+}
+
+void Chess::generateKnightMoveBitBoard(){
+
+    std::pair<int,int> offsets[] = {
+        {-2,-1},{-2, 1},{ 2,-1},{ 2, 1},
+        {-1,-2},{-1, 2},{ 1,-2},{ 1, 2}
+    };
+
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            uint64_t mask = 0ULL; 
+            for (auto [dx, dy] : offsets) {
+                int nx = x + dx, ny = y + dy;
+                // skip anything that goes out of bounds
+                if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
+                    int to = ny * 8 + nx;
+                    mask |= (1ULL << to);
+                }
+            }
+            _knightBitboards[y * 8 + x] = BitBoard(mask);
+        }
+    }
+}
+
+void Chess::generateKnightMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t emptySquares){
+    knightBoard.forEachBit([&](int fromSquare){
+        BitBoard moveBitboard = BitBoard(_knightBitboards[fromSquare].getData() & emptySquares);
+        moveBitboard.forEachBit([&](int toSquare) {
+            moves.emplace_back(fromSquare, toSquare, Knight);
+        });
+    });
+}
+
+void Chess::generateKingMoveBitBoard(){
+    std::pair<int,int> offsets[] = {
+        {-1,1},{0,1},{1,1},
+        {-1,0},{1,0},
+        {-1,-1},{0,-1},{1,-1}
+    };
+
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            uint64_t mask = 0ULL; 
+            for (auto [dx, dy] : offsets) {
+                int nx = x + dx, ny = y + dy;
+                // skip anything that goes out of bounds
+                if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
+                    int to = ny * 8 + nx;
+                    mask |= (1ULL << to);
+                }
+            }
+            _kingBitboards[y * 8 + x] = BitBoard(mask); 
+        }
+    }
+}
+
+void Chess::generateKingMoves(std::vector<BitMove>& moves, BitBoard kingBoard, uint64_t emptySquares){
+    kingBoard.forEachBit([&](int fromSquare){
+        BitBoard moveBitboard = BitBoard(_kingBitboards[fromSquare].getData() & emptySquares);
+        moveBitboard.forEachBit([&](int toSquare) {
+            moves.emplace_back(fromSquare, toSquare, King);
+        });
+    });
+}
+
+void Chess::generatePawnMoveBitBoardList(std::vector<BitMove>& moves, const BitBoard pawnBoard, const BitBoard emptySquares, const BitBoard enemySquares, char playerColor)
+{
+    // file and rankk masks for pawns
+    const uint64_t NotA   = 0xfefefefefefefefeULL;
+    const uint64_t NotH   = 0x7f7f7f7f7f7f7f7fULL;
+    const uint64_t RANK_2 = 0x000000000000FF00ULL; // white
+    const uint64_t RANK_7 = 0x00FF000000000000ULL; // black
+
+    const uint64_t pawnSquares = pawnBoard.getData();
+    const uint64_t empty = emptySquares.getData();
+    const uint64_t enemy = enemySquares.getData();
+
+    const bool white = (playerColor == 'w' || playerColor == 'W' || playerColor == 0);
+
+    // helper to convert bit masks int BitMoves
+    auto emitFromMask = [&](uint64_t mask, int deltaToMinusFrom) {
+        if (!mask) return;
+        BitBoard bitBoard(mask);
+        bitBoard.forEachBit([&](int toSq){
+            int fromSq = toSq - deltaToMinusFrom;
+            moves.emplace_back(fromSq, toSq, Pawn);
+        });
+    };
+
+    if (white) {
+        // forwards movement
+        uint64_t one = (pawnSquares << 8) & empty;
+        uint64_t two = (((pawnSquares & RANK_2) << 8) & empty);
+        two = (two << 8) & empty;
+
+        // diag captures
+        uint64_t capL = (pawnSquares << 7) & enemy & NotH;
+        uint64_t capR = (pawnSquares << 9) & enemy & NotA;
+
+        emitFromMask(one, 8);
+        emitFromMask(two, 16);
+        emitFromMask(capL, 7);
+        emitFromMask(capR, 9);
+    } else { // black moves (reversed)
+        uint64_t one = (pawnSquares >> 8) & empty;
+        uint64_t two = (((pawnSquares & RANK_7) >> 8) & empty);
+        two = (two >> 8) & empty;
+        uint64_t capL = (pawnSquares >> 9) & enemy & NotH;
+        uint64_t capR = (pawnSquares >> 7) & enemy & NotA;
+
+        emitFromMask(one, -8);
+        emitFromMask(two, -16);
+        emitFromMask(capL, -9);
+        emitFromMask(capR, -7);
+    }
+}
+
+void Chess::generatePawnMoves(const char *state, std::vector<BitMove>& moves, int file, int rank, int playerColor)
+{
+    if (!state) return;
+    if (file < 0 || file >= 8 || rank < 0 || rank >= 8) return;
+
+    auto index    = [](int x, int y){ return y * 8 + x; };
+    auto inBounds = [](int x, int y){ return x >= 0 && x < 8 && y >= 0 && y < 8; };
+
+    // helpers for us to check for squares and the player color
+    auto at = [&](int x, int y)->char {
+        if (!inBounds(x, y)) return '#';
+        return state[index(x, y)];
+    };
+
+    auto isEmpty      = [&](int x, int y)->bool { return at(x, y) == '0'; };
+    auto isWhitePiece = [&](char c)->bool { return (c >= 'A' && c <= 'Z'); };
+    auto isBlackPiece = [&](char c)->bool { return (c >= 'a' && c <= 'z'); };
+
+    const bool white = (playerColor == 0 || playerColor == 'w' || playerColor == 'W');
+
+    auto detectWhiteStartRow = [&]() -> int { //detecting our starting row for white pawns
+        for (int x = 0; x < 8; ++x) {
+            if (at(x, 6) == 'P') return 6;
+            if (at(x, 1) == 'P') return 1;
+        }
+        return 6;
+    };
+    auto detectBlackStartRow = [&]() -> int { //detecting our starting row for black pawns
+        for (int x = 0; x < 8; ++x) {
+            if (at(x, 1) == 'p') return 1;
+            if (at(x, 6) == 'p') return 6;
+        }
+        return 1;
+    };
+
+    const int whiteStartRow = detectWhiteStartRow();
+    const int blackStartRow = detectBlackStartRow();
+
+    const int whiteDir = (whiteStartRow == 6) ? -1 : +1;
+    const int blackDir = (blackStartRow == 1) ? +1 : -1;
+    const int dir      = white ? whiteDir : blackDir;
+    const int startRow = white ? whiteStartRow : blackStartRow;
+    const int fromSq = index(file, rank);
+
+    // pawn check (has to be right player color)
+    char src = at(file, rank);
+    if (white) { if (src != 'P') return; }
+    else       { if (src != 'p') return; }
+
+    // to see if the next space forward is empty
+    int forward1Rank = rank + dir;
+    if (inBounds(file, forward1Rank) && isEmpty(file, forward1Rank)) {
+        moves.emplace_back(fromSq, index(file, forward1Rank), Pawn);
+
+        // at the start, if moving 2 ranks, checks to see for both spaces to be empty
+        if (rank == startRow) {
+            int forward2Ranks = rank + 2 * dir;
+            if (inBounds(file, forward2Ranks) && isEmpty(file, forward2Ranks)) {
+                moves.emplace_back(fromSq, index(file, forward2Ranks), Pawn);
+            }
+        }
+    }
+
+    // we can only capture diagonally 
+    int leftFile  = file - 1;
+    int rightFile = file + 1;
+
+    if (inBounds(leftFile, forward1Rank)) {
+        char dst = at(leftFile, forward1Rank);
+        if (dst != '0' && (white ? isBlackPiece(dst) : isWhitePiece(dst))) {
+            moves.emplace_back(fromSq, index(leftFile, forward1Rank), Pawn);
+        }
+    }
+    if (inBounds(rightFile, forward1Rank)) {
+        char dst = at(rightFile, forward1Rank);
+        if (dst != '0' && (white ? isBlackPiece(dst) : isWhitePiece(dst))) {
+            moves.emplace_back(fromSq, index(rightFile, forward1Rank), Pawn);
+        }
+    }
 }

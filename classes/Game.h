@@ -23,7 +23,6 @@
 #include "BitHolder.h"
 #include "Grid.h"
 
-
 const int AI_PLAYER = 1;
 const int HUMAN_PLAYER = -1;
 
