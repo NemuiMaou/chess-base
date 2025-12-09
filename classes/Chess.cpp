@@ -613,49 +613,11 @@ void Chess::generatePawnMoves(const char *state, std::vector<BitMove>& moves, in
 void Chess::updateAI(){
     int playerNum = getCurrentPlayer()->playerNumber();
     int colorToMove = (playerNum == 0) ? WHITE : BLACK;
-
     std::string state = stateString();
-
     auto _moves = generateAllMoves(state, colorToMove);
-    // if (rootMoves.empty()) return;
 
-    // int bestVal = negInfinite;
-    // BitMove bestMove = rootMoves.front();
-    // int searchDepth = 4;
-
-    // for (const auto& move : rootMoves) {
-    //     char captured    = state[move.to];
-    //     char pieceMoving = state[move.from];
-
-    //     state[move.to]   = pieceMoving; // temp move
-    //     state[move.from] = '0';
-
-    //     int val = -negamax(state, searchDepth - 1, negInfinite, posInfinite, -colorToMove);
-
-    //     state[move.from] = pieceMoving; // the undo
-    //     state[move.to]   = captured;
-
-    //     if (val > bestVal) {
-    //         bestVal = val;
-    //         bestMove = move;
-    //     }
-    // }
-    // if (bestVal == negInfinite) return; // if no move was found
-
-    // int srcSquare = bestMove.from;
-    // int dstSquare = bestMove.to;
-
-    // BitHolder& src = getHolderAt(srcSquare & 7, srcSquare / 8);
-    // BitHolder& dst = getHolderAt(dstSquare & 7, dstSquare / 8);
-    // Bit* bit = src.bit();
-    // if (!bit) return;
-
-    // dst.dropBitAtPoint(bit, ImVec2(0, 0));
-    // src.setBit(nullptr);
-    // bitMovedFromTo(*bit, src, dst);
     int bestVal = negInfinite;
     BitMove bestMove;
-    // std::string state = stateString();
     // _countMoves = 0;
 
     // Search through current legal moves
@@ -681,8 +643,7 @@ void Chess::updateAI(){
         }
     }
 
-    // Execute the best move on the actual board
-    // I’m kind of amazed this code works and will be improving it
+    // executing the best move on the actual board
     if(bestVal != negInfinite) {
         // std::cout << "Moves checked: " << _countMoves << std::endl;
         int srcSquare = bestMove.from;
