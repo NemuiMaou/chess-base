@@ -51,6 +51,15 @@ void Chess::setUpBoard()
     
     generateKnightMoveBitBoard();
     generateKingMoveBitBoard();
+    generateRookMoveBitBoard();
+    generateBishopMoveBitBoard();
+    generateQueenMoveBitBoard();
+
+    if (gameHasAI()) {
+        // If your engine uses AI_PLAYER like TicTacToe, you can use that instead of 1
+        setAIPlayer(1);   // second player = AI (usually black)
+    }
+
     startGame();
 }
 
@@ -142,12 +151,11 @@ bool Chess::canBitMoveFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
     const int toY   = dstSquare->getRow();
     if (fromX == toX && fromY == toY) return false;
 
-    // to prevent self-capture
+    // prevent self-capture
     Player* mover = bit.getOwner();
     Player* atDst = ownerAt(toX, toY);
     if (atDst && mover == atDst) return false;
 
-    
     char p = pieceNotation(fromX, fromY);
     if (p == '0') return false;
 
@@ -170,8 +178,8 @@ bool Chess::canBitMoveFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
     // pawns
     if (p == 'P' || p == 'p') {
         std::vector<BitMove> pmoves;
-        const int playerColor = (p == 'P') ? 0 : 1;   
-        auto s = stateString();                       
+        const int playerColor = (p == 'P') ? 0 : 1;
+        auto s = stateString();
         generatePawnMoves(s.c_str(), pmoves, fromX, fromY, playerColor);
 
         for (const auto& m : pmoves) {
@@ -180,8 +188,65 @@ bool Chess::canBitMoveFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
         return false;
     }
 
-    // need to add the others (anything else can just move as of right now)
-    return true;
+    // helper to help my sliding pieces and creates a mask for them that prevents them from moving pass any piece
+    auto isObstructed = [&](const std::vector<std::pair<int,int>>& dirs) -> uint64_t {
+        uint64_t mask = 0ULL;
+        for (auto [dx, dy] : dirs) {
+            int x = fromX + dx;
+            int y = fromY + dy;
+            while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+                int sq = idx(x, y);
+                mask |= (1ULL << sq);
+                if (ownerAt(x, y) != nullptr) { // if there is a piece, stop the search
+                    break;
+                }
+                x += dx;
+                y += dy;
+            }
+        }
+        return mask;
+    };
+
+    // rooks
+    if (p == 'R' || p == 'r') {
+        std::vector<std::pair<int,int>> dirs = {
+            { 1,  0},
+            {-1,  0},
+            { 0,  1},
+            { 0, -1}
+        };
+
+        uint64_t mask = isObstructed(dirs);
+        _rookBitboards[fromSq] = BitBoard(mask);
+        return (mask & (1ULL << toSq)) != 0ULL;
+    }
+
+    // bishops
+    if (p == 'B' || p == 'b') {
+        std::vector<std::pair<int,int>> dirs = {
+            { 1,  1},
+            { 1, -1},
+            {-1,  1},
+            {-1, -1}
+        };
+
+        uint64_t mask = isObstructed(dirs);
+        _bishopBitboards[fromSq] = BitBoard(mask);
+        return (mask & (1ULL << toSq)) != 0ULL;
+    }
+
+    // queens
+    if (p == 'Q' || p == 'q') {
+        std::vector<std::pair<int,int>> dirs = {
+            { 1,  0}, {-1,  0}, { 0,  1}, { 0, -1},
+            { 1,  1}, { 1, -1}, {-1,  1}, {-1, -1}
+        };
+
+        uint64_t mask = isObstructed(dirs);
+        _queenBitboards[fromSq] = BitBoard(mask);
+        return (mask & (1ULL << toSq)) != 0ULL;
+    }
+    return false;
 }
 
 void Chess::stopGame()
@@ -302,6 +367,112 @@ void Chess::generateKingMoves(std::vector<BitMove>& moves, BitBoard kingBoard, u
         BitBoard moveBitboard = BitBoard(_kingBitboards[fromSquare].getData() & emptySquares);
         moveBitboard.forEachBit([&](int toSquare) {
             moves.emplace_back(fromSquare, toSquare, King);
+        });
+    });
+}
+
+void Chess::generateRookMoveBitBoard(){
+    for (int from = 0; from < 64; ++from) {
+        int fromX = from % 8;
+        int fromY = from / 8;
+        uint64_t mask = 0ULL;
+
+        auto direction = [&](int dx, int dy)
+        {
+            int x = fromX + dx;
+            int y = fromY + dy;
+            while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+                int to = y * 8 + x;
+                mask |= (1ULL << to);
+                x += dx;
+                y += dy;
+            }
+        };
+        direction( 1,  0);
+        direction(-1,  0);
+        direction( 0,  1);
+        direction( 0, -1);
+        _rookBitboards[from] = BitBoard(mask);
+    }
+}
+
+void Chess::generateRookMoves(std::vector<BitMove>& moves, BitBoard rookBoard, uint64_t emptySquares){
+    rookBoard.forEachBit([&](int fromSquare) {
+        BitBoard moveBitboard(_rookBitboards[fromSquare].getData() & emptySquares);
+        moveBitboard.forEachBit([&](int toSquare) {
+            moves.emplace_back(fromSquare, toSquare, Rook);
+        });
+    });
+}
+
+void Chess::generateBishopMoveBitBoard(){
+    for (int from = 0; from < 64; ++from) {
+        int fromX = from % 8;
+        int fromY = from / 8;
+        uint64_t mask = 0ULL;
+
+        auto direction = [&](int dx, int dy)
+        {
+            int x = fromX + dx;
+            int y = fromY + dy;
+            while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+                int to = y * 8 + x;
+                mask |= (1ULL << to);
+                x += dx;
+                y += dy;
+            }
+        };
+        direction( 1,  1);
+        direction( 1, -1);
+        direction(-1,  1);
+        direction(-1, -1);
+        _bishopBitboards[from] = BitBoard(mask);
+    }
+}
+
+void Chess::generateBishopMoves(std::vector<BitMove>& moves, BitBoard bishopBoard, uint64_t emptySquares){
+    bishopBoard.forEachBit([&](int fromSquare) {
+        BitBoard moveBitboard(_bishopBitboards[fromSquare].getData() & emptySquares);
+        moveBitboard.forEachBit([&](int toSquare) {
+            moves.emplace_back(fromSquare, toSquare, Bishop);
+        });
+    });
+}
+
+void Chess::generateQueenMoveBitBoard(){
+    for (int from = 0; from < 64; ++from) {
+        int fromX = from % 8;
+        int fromY = from / 8;
+        uint64_t mask = 0ULL;
+
+        auto direction = [&](int dx, int dy)
+        {
+            int x = fromX + dx;
+            int y = fromY + dy;
+            while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+                int to = y * 8 + x;
+                mask |= (1ULL << to);
+                x += dx;
+                y += dy;
+            }
+        };
+        direction( 1,  0);
+        direction( 1,  1);
+        direction(-1,  0);
+        direction( 1, -1);
+        direction( 0,  1);
+        direction(-1,  1);
+        direction( 0, -1);
+        direction(-1, -1);
+        _queenBitboards[from] = BitBoard(mask);
+    }
+}
+
+void Chess::generateQueenMoves(std::vector<BitMove>& moves, BitBoard queenBoard, uint64_t emptySquares){
+    queenBoard.forEachBit([&](int fromSquare) {
+        BitBoard moveBitboard(_queenBitboards[fromSquare].getData() & emptySquares);
+        moveBitboard.forEachBit([&](int toSquare) {
+            moves.emplace_back(fromSquare, toSquare, Queen);
         });
     });
 }
@@ -437,4 +608,272 @@ void Chess::generatePawnMoves(const char *state, std::vector<BitMove>& moves, in
             moves.emplace_back(fromSq, index(rightFile, forward1Rank), Pawn);
         }
     }
+}
+
+void Chess::updateAI(){
+    int playerNum = getCurrentPlayer()->playerNumber();
+    int colorToMove = (playerNum == 0) ? WHITE : BLACK;
+
+    std::string state = stateString();
+
+    auto _moves = generateAllMoves(state, colorToMove);
+    // if (rootMoves.empty()) return;
+
+    // int bestVal = negInfinite;
+    // BitMove bestMove = rootMoves.front();
+    // int searchDepth = 4;
+
+    // for (const auto& move : rootMoves) {
+    //     char captured    = state[move.to];
+    //     char pieceMoving = state[move.from];
+
+    //     state[move.to]   = pieceMoving; // temp move
+    //     state[move.from] = '0';
+
+    //     int val = -negamax(state, searchDepth - 1, negInfinite, posInfinite, -colorToMove);
+
+    //     state[move.from] = pieceMoving; // the undo
+    //     state[move.to]   = captured;
+
+    //     if (val > bestVal) {
+    //         bestVal = val;
+    //         bestMove = move;
+    //     }
+    // }
+    // if (bestVal == negInfinite) return; // if no move was found
+
+    // int srcSquare = bestMove.from;
+    // int dstSquare = bestMove.to;
+
+    // BitHolder& src = getHolderAt(srcSquare & 7, srcSquare / 8);
+    // BitHolder& dst = getHolderAt(dstSquare & 7, dstSquare / 8);
+    // Bit* bit = src.bit();
+    // if (!bit) return;
+
+    // dst.dropBitAtPoint(bit, ImVec2(0, 0));
+    // src.setBit(nullptr);
+    // bitMovedFromTo(*bit, src, dst);
+    int bestVal = negInfinite;
+    BitMove bestMove;
+    // std::string state = stateString();
+    // _countMoves = 0;
+
+    // Search through current legal moves
+    for(auto move : _moves) {
+        char boardSave = state[move.to];
+        char pieceMoving = state[move.from];
+
+        // Make the move on our state copy
+        state[move.to] = pieceMoving;
+        state[move.from] = '0';
+
+        // Call negamax to evaluate this move
+        int moveVal = -negamax(state, 3, negInfinite, posInfinite, WHITE);
+
+        // Undo the move
+        state[move.from] = pieceMoving;
+        state[move.to] = boardSave;
+
+        // Track the best move found
+        if (moveVal > bestVal) {
+            bestMove = move;
+            bestVal = moveVal;
+        }
+    }
+
+    // Execute the best move on the actual board
+    // I’m kind of amazed this code works and will be improving it
+    if(bestVal != negInfinite) {
+        // std::cout << "Moves checked: " << _countMoves << std::endl;
+        int srcSquare = bestMove.from;
+        int dstSquare = bestMove.to;
+        BitHolder& src = getHolderAt(srcSquare&7, srcSquare/8);
+        BitHolder& dst = getHolderAt(dstSquare&7, dstSquare/8);
+        Bit* bit = src.bit();
+        dst.dropBitAtPoint(bit, ImVec2(0, 0));
+        src.setBit(nullptr);
+        bitMovedFromTo(*bit, src, dst);
+    }
+}
+
+int Chess::negamax(std::string& state, int depth, int alpha, int beta, int playerColor)
+{
+    if (depth == 0) {
+        return evaluateBoard(state) * playerColor;
+    }
+    auto newMoves = generateAllMoves(state, playerColor);
+
+    if (newMoves.empty()) {
+        return 0;
+    }
+
+    int bestVal = negInfinite;
+    for (auto& move : newMoves) {
+        char captured   = state[move.to];
+        char pieceMoving = state[move.from];
+
+        state[move.to]   = pieceMoving;
+        state[move.from] = '0';
+
+        bestVal = -negamax(state, depth - 1, -beta, -alpha, -playerColor);
+
+        state[move.from] = pieceMoving;
+        state[move.to]   = captured;
+
+        alpha = std::max(alpha, bestVal);
+        if (alpha >= beta) break;
+    }
+    return bestVal;
+}
+
+int Chess::evaluateBoard(const std::string& state) {
+    static const std::map<char, int> evaluateScores = {
+        {'P', 100}, {'p', -100},
+        {'N', 200}, {'n', -200},
+        {'B', 230}, {'b', -230},
+        {'R', 400}, {'r', -400},
+        {'Q', 900}, {'q', -900},
+        {'K', 2000}, {'k', -2000},
+        {'0', 0}
+    };
+
+    int value = 0;
+    for (char ch : state) {
+        auto it = evaluateScores.find(ch);
+        if (it != evaluateScores.end()) {
+            value += it->second;
+        }
+    }
+    return value;
+}
+
+std::vector<BitMove> Chess::generateAllMoves(const std::string& state, int playerColor)
+{
+    std::vector<BitMove> moves;
+    moves.reserve(64);
+
+    auto index    = [](int x, int y){ return y * 8 + x; };
+    auto inBounds = [](int x, int y){ return x >= 0 && x < 8 && y >= 0 && y < 8; };
+
+    auto at = [&](int x, int y)->char {
+        if (!inBounds(x, y)) return '#';
+        return state[index(x, y)];
+    };
+
+    auto isWhitePiece = [](char c)->bool { return (c >= 'A' && c <= 'Z'); };
+    auto isBlackPiece = [](char c)->bool { return (c >= 'a' && c <= 'z'); };
+
+    const bool whiteToMove = (playerColor == WHITE);
+
+    for (int sq = 0; sq < 64; ++sq) {
+        int file = sq % 8;
+        int rank = sq / 8;
+        char piece = state[static_cast<size_t>(sq)];
+        if (piece == '0') continue;
+
+        if (whiteToMove && !isWhitePiece(piece)) continue;
+        if (!whiteToMove && !isBlackPiece(piece)) continue;
+
+        // pawns
+        if (piece == 'P' || piece == 'p') {
+            generatePawnMoves(state.c_str(), moves, file, rank, whiteToMove ? 0 : 1);
+            continue;
+        }
+
+        auto tryAdd = [&](int toX, int toY, ChessPiece pieceType) {
+            if (!inBounds(toX, toY)) return;
+            char dst = at(toX, toY);
+            if (dst == '#') return;
+
+            // can't capture own pieces
+            if (dst != '0') {
+                if (whiteToMove && isWhitePiece(dst)) return;
+                if (!whiteToMove && isBlackPiece(dst)) return;
+            }
+
+            int fromSq = index(file, rank);
+            int toSq   = index(toX, toY);
+            moves.emplace_back(fromSq, toSq, pieceType);
+        };
+
+        // knights
+        if (piece == 'N' || piece == 'n') {
+            static const std::pair<int,int> kOffsets[] = {
+                {-2,-1},{-2, 1},{ 2,-1},{ 2, 1},
+                {-1,-2},{-1, 2},{ 1,-2},{ 1, 2}
+            };
+            for (auto [dx, dy] : kOffsets) {
+                tryAdd(file + dx, rank + dy, Knight);
+            }
+            continue;
+        }
+
+        // king
+        if (piece == 'K' || piece == 'k') {
+            static const std::pair<int,int> kOffsets[] = {
+                {-1, 1},{ 0, 1},{ 1, 1},
+                {-1, 0},        { 1, 0},
+                {-1,-1},{ 0,-1},{ 1,-1}
+            };
+            for (auto [dx, dy] : kOffsets) {
+                tryAdd(file + dx, rank + dy, King);
+            }
+            continue;
+        }
+
+        // same helper as before for the pieces that slide 
+        auto isObstructed = [&](const std::vector<std::pair<int,int>>& dirs, ChessPiece pieceType){
+            for (auto [dx, dy] : dirs) {
+                int x = file + dx;
+                int y = rank + dy;
+                while (inBounds(x, y)) {
+                    char dst = at(x, y);
+                    if (dst == '0') {
+                        int fromSq = index(file, rank);
+                        int toSq   = index(x, y);
+                        moves.emplace_back(fromSq, toSq, pieceType);
+                    } else {
+                        if (whiteToMove ? isBlackPiece(dst) : isWhitePiece(dst)) {
+                            int fromSq = index(file, rank);
+                            int toSq   = index(x, y);
+                            moves.emplace_back(fromSq, toSq, pieceType);
+                        }
+                        break;
+                    }
+                    x += dx;
+                    y += dy;
+                }
+            }
+        };
+
+        // rooks
+        if (piece == 'R' || piece == 'r') {
+            std::vector<std::pair<int,int>> dirs = {
+                { 1,  0}, {-1,  0}, { 0,  1}, { 0, -1}
+            };
+            isObstructed(dirs, Rook);
+            continue;
+        }
+
+        // bishops
+        if (piece == 'B' || piece == 'b') {
+            std::vector<std::pair<int,int>> dirs = {
+                { 1,  1}, { 1, -1}, {-1,  1}, {-1, -1}
+            };
+            isObstructed(dirs, Bishop);
+            continue;
+        }
+
+        // queens
+        if (piece == 'Q' || piece == 'q') {
+            std::vector<std::pair<int,int>> dirs = {
+                { 1,  0}, {-1,  0}, { 0,  1}, { 0, -1},
+                { 1,  1}, { 1, -1}, {-1,  1}, {-1, -1}
+            };
+            isObstructed(dirs, Queen);
+            continue;
+        }
+    }
+
+    return moves;
 }

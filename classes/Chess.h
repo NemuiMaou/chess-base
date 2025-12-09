@@ -6,6 +6,11 @@
 
 constexpr int pieceSize = 80;
 
+constexpr int WHITE = 1;
+constexpr int BLACK = -1;  
+constexpr int negInfinite = -1000000;
+constexpr int posInfinite =  1000000;
+
 enum AllBitBoards
 {
     WHITE_PAWNS,
@@ -50,11 +55,26 @@ public:
 
     Grid* getGrid() override { return _grid; }
 
+    void updateAI() override;
+    bool gameHasAI() override { return true; }    
+    int evaluateBoard(const std::string& state);
+    int negamax(std::string& state, int depth, int alpha, int beta, int playerColor);
+    std::vector<BitMove> generateAllMoves(const std::string& state, int playerColor);
+
     void generateKingMoveBitBoard();
     void generateKingMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t emptySquares);
 
     void generateKnightMoveBitBoard();
     void generateKnightMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t emptySquares);
+
+    void generateRookMoveBitBoard();
+    void generateRookMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t emptySquares);
+
+    void generateBishopMoveBitBoard();
+    void generateBishopMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t emptySquares);
+
+    void generateQueenMoveBitBoard();
+    void generateQueenMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t emptySquares);
 
     void generatePawnMoveBitBoardList(std::vector<BitMove>& moves, const BitBoard pawnBoard, const BitBoard emptySquares, const BitBoard enemySquares, char playerColor);
     void generatePawnMoves(const char *state, std::vector<BitMove>& moevs, int file, int rank, int playerColor);
@@ -69,4 +89,8 @@ private:
 
     BitBoard _knightBitboards[64];
     BitBoard _kingBitboards[64];
+    BitBoard _rookBitboards[64];
+    BitBoard _bishopBitboards[64];
+    BitBoard _queenBitboards[64];
+    
 };
